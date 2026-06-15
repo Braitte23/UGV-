@@ -1,0 +1,97 @@
+model_name = "nvidia/segformer-b0-finetuned-ade-512-512"
+
+processor = AutoImageProcessor.from_pretrained(model_name)
+model = AutoModelForSemanticSegmentation.from_pretrained(model_name)
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model.to(device)
+model.eval()
+
+# Diccionario de traducción y colores (BGR) para las clases comunes de ADE20K
+ETIQUETAS_MAPPING = {
+    0: ("Pared", (120, 120, 120)),
+    1: ("Edificio", (100, 100, 150)),
+    2: ("Cielo", (235, 206, 135)),
+    3: ("Suelo", (140, 140, 140)),
+    4: ("Arbol", (34, 139, 34)),
+    5: ("Techo", (180, 120, 120)),
+    6: ("Carretera", (80, 80, 80)),
+    9: ("Ventana", (255, 200, 0)),
+    11: ("Acera", (190, 190, 190)),
+    12: ("Persona", (0, 0, 255)),
+    13: ("Poste", (60, 60, 60)),
+    14: ("Puerta", (42, 42, 165)),
+    17: ("Planta", (50, 205, 50)),
+    20: ("Carro", (255, 0, 0)),
+    32: ("Cerca/Valla", (153, 102, 51)),
+    80: ("Autobus", (0, 165, 255)),
+    83: ("Camion", (0, 255, 255)),
+    93: ("Letrero/Poste", (128, 128, 0)),
+}
+
+def segmentador(rgb):
+    rgb_in = cv.cvtColor(rgb, cv.COLOR_BGR2RGB)
+    inputs = processor(images=rgb_in, return_tensors="pt").to(device)
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    logits = outputs.logits
+    mask = torch.argmax(logits, dim=1)[0].cpu().numpy()
+    return mask
+
+
+
+       img_cv = cv.cvtColor(img_np, cv.COLOR_RGBA2BGR)
+        
+        # --- PROCESAMIENTO DE SEGMENTACIÓN ---
+        mask_low = segmentador(img_cv)
+        mask_full = cv.resize(mask_low, (W, H), interpolation=cv.INTER_NEAREST)
+        
+        overlay = img_cv.copy()
+        clases_detectadas = np.unique(mask_full)
+
+        for class_id in clases_detectadas:
+            if class_id not in ETIQUETAS_MAPPING:
+                continue
+                
+            nombre_etiqueta, color = ETIQUETAS_MAPPING[class_id]
+            objeto_mask = (mask_full == class_id).astype(np.uint8)
+            
+            # Colorear la máscara en el lienzo secundario
+            overlay[objeto_mask == 1] = color
+            
+            # Encontrar contornos para posicionar los textos
+            contornos, _ = cv.findContours(objeto_mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+            for contorno in contornos:
+                if cv.contourArea(contorno) > 3000:  # Evita textos duplicados en motas de ruido pequeñas
+                    M = cv.moments(contorno)
+                    if M["m00"] != 0:
+                        cX = int(M["m10"] / M["m00"])
+                        cY = int(M["m01"] / M["m00"])
+                        
+                        # Fondo negro para que el texto sea legible sobre cualquier color
+                        (w_txt, h_txt), _ = cv.getTextSize(nombre_etiqueta, cv.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                        cv.rectangle(img_cv, (cX - 5, cY - h_txt - 5), (cX + w_txt + 5, cY + 5), (0, 0, 0), -1)
+                        
+                        cv.putText(
+                            img_cv, 
+                            nombre_etiqueta, 
+                            (cX, cY), 
+                            cv.FONT_HERSHEY_SIMPLEX, 
+                            0.5, 
+                            (255, 255, 255), 
+                            1, 
+                            cv.LINE_AA
+                        )
+
+        # Fusionar la imagen con las máscaras de color (transparencia al 35%)
+        img_final = cv.addWeighted(img_cv, 0.65, overlay, 0.35, 0)
+
+        # Dibujar tus rectángulos guía de las ROIs en pantalla para Debug
+        cv.rectangle(img_final, (u1, v1), (u2, v2), (0, 255, 0), 2)
+        cv.line(img_final, (uC1, v1), (uC1, v2), (255, 0, 0), 1)
+        cv.line(img_final, (uC2, v1), (uC2, v2), (255, 0, 0), 1)
+
+
+
