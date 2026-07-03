@@ -3,9 +3,7 @@ import numpy as np
 import cv2 as cv
 
 
-# ==============================
-# FUNCIÓN DE OCUPACIÓN
-# ==============================
+
 def riesgo(roi, prev_roi, threshold=3.0, alpha=0.1, beta = 0.5):
     roi_clean = roi[np.isfinite(roi)] / 1000.0  # mm → metros
 
@@ -28,10 +26,6 @@ def riesgo(roi, prev_roi, threshold=3.0, alpha=0.1, beta = 0.5):
 
     #return int((q10 <= threshold) and (p > alpha))
 
-
-# ==============================
-# INICIALIZACIÓN ZED
-# ==============================
 zed = sl.Camera()
 
 init_params = sl.InitParameters()
@@ -46,18 +40,14 @@ runtime = sl.RuntimeParameters()
 image = sl.Mat()
 depth = sl.Mat()
 
-#==============================
-# MEMORIA GLOBAL 
-#==============================
+
 
 prev_left = None
 prev_center = None
 prev_right = None
 
 
-# ==============================
-# LOOP PRINCIPAL
-# ==============================
+
 while True:
 
     if zed.grab(runtime) == sl.ERROR_CODE.SUCCESS:
@@ -68,9 +58,7 @@ while True:
         img_np = image.get_data()
         depth_np = depth.get_data()
 
-        # ==============================
-        # ROI GLOBAL
-        # ==============================
+
         H, W = depth_np.shape
 
         v1 = int(0.3 * H)
@@ -78,9 +66,7 @@ while True:
         u1 = int(0.3 * W)
         u2 = int(0.7 * W)
 
-        # ==============================
-        # DIVISIÓN EN 3 REGIONES
-        # ==============================
+
         w = u2 - u1
 
         uC1 = u1 + w // 3
@@ -90,9 +76,7 @@ while True:
         roi_center = depth_np[v1:v2, uC1:uC2]
         roi_right  = depth_np[v1:v2, uC2:u2]
 
-        # ==============================
-        # ESTADOS BINARIOS
-        # ==============================
+
         R_L, dL = riesgo(roi_left, prev_left)
         R_C, dC = riesgo(roi_center, prev_center)
         R_R, dR= riesgo(roi_right, prev_right)
@@ -106,18 +90,14 @@ while True:
         riesgos = np.array([R_L, R_C, R_R])
         idx = np.argmin(riesgos)
 
-        # ==============================
-        # POLÍTICA DE CONTROL
-        # ==============================
+
         if idx == 0:
             accion = "left"
         elif idx == 1:
             accion = "forward"
         else:
             accion = "right"
-        # ==============================
-        # VISUALIZACIÓN
-        # ==============================
+
         img_cv = cv.cvtColor(img_np, cv.COLOR_RGBA2BGR)
 
         texto = f"L:{R_L} C:{R_C} R:{R_R} -> {accion}"
