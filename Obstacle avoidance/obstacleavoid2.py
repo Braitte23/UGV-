@@ -3,9 +3,6 @@ import numpy as np
 import cv2 as cv
 
 
-# ==============================
-# FUNCIÓN DE OCUPACIÓN
-# ==============================
 def ocupado(roi, threshold=3.0, alpha=0.1):
     roi_clean = roi[np.isfinite(roi)] / 1000.0  # mm → metros
 
@@ -18,9 +15,7 @@ def ocupado(roi, threshold=3.0, alpha=0.1):
     return int((q10 <= threshold) and (p > alpha))
 
 
-# ==============================
-# INICIALIZACIÓN ZED
-# ==============================
+
 zed = sl.Camera()
 
 init_params = sl.InitParameters()
@@ -36,9 +31,6 @@ image = sl.Mat()
 depth = sl.Mat()
 
 
-# ==============================
-# LOOP PRINCIPAL
-# ==============================
 while True:
 
     if zed.grab(runtime) == sl.ERROR_CODE.SUCCESS:
@@ -49,9 +41,6 @@ while True:
         img_np = image.get_data()
         depth_np = depth.get_data()
 
-        # ==============================
-        # ROI GLOBAL
-        # ==============================
         H, W = depth_np.shape
 
         v1 = int(0.3 * H)
@@ -59,9 +48,6 @@ while True:
         u1 = int(0.3 * W)
         u2 = int(0.7 * W)
 
-        # ==============================
-        # DIVISIÓN EN 3 REGIONES
-        # ==============================
         w = u2 - u1
 
         uC1 = u1 + w // 3
@@ -71,16 +57,12 @@ while True:
         roi_center = depth_np[v1:v2, uC1:uC2]
         roi_right  = depth_np[v1:v2, uC2:u2]
 
-        # ==============================
-        # ESTADOS BINARIOS
-        # ==============================
+
         sL = ocupado(roi_left)
         sC = ocupado(roi_center)
         sR = ocupado(roi_right)
 
-        # ==============================
-        # POLÍTICA DE CONTROL
-        # ==============================
+
         if not sL and not sC and not sR:
             accion = "forward"
 
@@ -101,9 +83,7 @@ while True:
         else:
             accion = "forward"
 
-        # ==============================
-        # VISUALIZACIÓN
-        # ==============================
+
         img_cv = cv.cvtColor(img_np, cv.COLOR_RGBA2BGR)
 
         texto = f"L:{sL} C:{sC} R:{sR} -> {accion}"
